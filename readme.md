@@ -12,7 +12,7 @@ telegram bot to manage servers (inside the bot)
 - automatic ssl
 
 ---
-environment: ubuntu 22.04/24.04, debian 11/12
+environment: ubuntu 22.04/24.04, debian 11/12/13
 
 ## Install:
 
