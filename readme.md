@@ -1,6 +1,7 @@
 telegram bot to manage servers (inside the bot)
 
 - VLESS (Reality OR Websocket)
+- Hysteria 2
 - NaiveProxy
 - OpenConnect
 - Wireguard
