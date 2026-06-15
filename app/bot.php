@@ -422,6 +422,48 @@ class Bot
             case preg_match('~^/changeHysteriaPass$~', $this->input['callback'], $m):
                 $this->changeHysteriaPass();
                 break;
+            case preg_match('~^/changeHysteriaUp$~', $this->input['callback'], $m):
+                $this->changeHysteriaUp();
+                break;
+            case preg_match('~^/changeHysteriaDown$~', $this->input['callback'], $m):
+                $this->changeHysteriaDown();
+                break;
+            case preg_match('~^/toggleHysteriaObfs$~', $this->input['callback'], $m):
+                $this->toggleHysteriaObfs();
+                break;
+            case preg_match('~^/changeHysteriaObfsPass$~', $this->input['callback'], $m):
+                $this->changeHysteriaObfsPass();
+                break;
+            case preg_match('~^/changeHysteriaUp$~', $this->input['callback'], $m):
+                $this->changeHysteriaUp();
+                break;
+            case preg_match('~^/changeHysteriaDown$~', $this->input['callback'], $m):
+                $this->changeHysteriaDown();
+                break;
+            case preg_match('~^/toggleHysteriaObfs$~', $this->input['callback'], $m):
+                $this->toggleHysteriaObfs();
+                break;
+            case preg_match('~^/changeHysteriaObfsPass$~', $this->input['callback'], $m):
+                $this->changeHysteriaObfsPass();
+                break;
+            case preg_match('~^/toggleHysteriaIgnoreBw$~', $this->input['callback'], $m):
+                $this->toggleHysteriaIgnoreBw();
+                break;
+            case preg_match('~^/toggleHysteriaSpeedTest$~', $this->input['callback'], $m):
+                $this->toggleHysteriaSpeedTest();
+                break;
+            case preg_match('~^/toggleHysteriaUDP$~', $this->input['callback'], $m):
+                $this->toggleHysteriaUDP();
+                break;
+            case preg_match('~^/changeHysteriaHopRange$~', $this->input['callback'], $m):
+                $this->changeHysteriaHopRange();
+                break;
+            case preg_match('~^/toggleHysteriaObfsType$~', $this->input['callback'], $m):
+                $this->toggleHysteriaObfsType();
+                break;
+            case preg_match('~^/toggleHysteriaIgnoreBw$~', $this->input['callback'], $m):
+                $this->toggleHysteriaIgnoreBw();
+                break;
             case preg_match('~^/changeOcDns$~', $this->input['callback'], $m):
                 $this->changeOcDns();
                 break;
@@ -1175,10 +1217,49 @@ class Bot
         $pac = $this->getPacConf();
         $this->ssh('pkill hysteria', 'hy');
         $c   = yaml_parse_file('/config/hysteria.yaml');
+
+        // Auth
         $c['auth']['password'] = $pac['hysteria_pass'];
+
+        // Bandwidth (server limits)
+        if (!empty($pac['hysteria_up'])) {
+            $c['bandwidth']['up'] = $pac['hysteria_up'] . ' mbps';
+        } else {
+            unset($c['bandwidth']['up']);
+        }
+        if (!empty($pac['hysteria_down'])) {
+            $c['bandwidth']['down'] = $pac['hysteria_down'] . ' mbps';
+        } else {
+            unset($c['bandwidth']['down']);
+        }
+        if (empty($c['bandwidth'])) {
+            unset($c['bandwidth']);
+        }
+
+        // ignoreClientBandwidth: force BBR
+        if (!empty($pac['hysteria_ignore_bw'])) {
+            $c['ignoreClientBandwidth'] = true;
+        } else {
+            unset($c['ignoreClientBandwidth']);
+        }
+
+        // Obfuscation (salamander)
+        if (!empty($pac['hysteria_obfs']) && !empty($pac['hysteria_obfs_pass'])) {
+            $c['obfs'] = [
+                'type'       => 'salamander',
+                'salamander' => ['password' => $pac['hysteria_obfs_pass']],
+            ];
+        } else {
+            unset($c['obfs']);
+        }
+
+        // Speed test & UDP
+        $c['speedTest']  = !empty($pac['hysteria_speedtest']);
+        $c['disableUDP'] = !empty($pac['hysteria_disable_udp']);
+
         yaml_emit_file('/config/hysteria.yaml', $c);
         if (!empty($pac['hysteria_pass'])) {
-            $this->ssh('hysteria server -c /config/hysteria.yaml', 'hy', false, '/logs/hysteria');
+            $this->ssh('hysteria server --config /config/hysteria.yaml', 'hy', false, '/logs/hysteria');
         }
     }
 
@@ -1246,6 +1327,187 @@ class Bot
         }
         $this->setPacConf($pac);
         $this->restartHysteria();
+        $this->menu('hy');
+    }
+
+    public function changeHysteriaUp()
+    {
+        $r = $this->send(
+            $this->input['chat'],
+            "@{$this->input['username']} enter upload bandwidth in mbps (e.g. 500)",
+            $this->input['message_id'],
+            reply: 'enter mbps',
+        );
+        $_SESSION['reply'][$r['result']['message_id']] = [
+            'start_message'  => $this->input['message_id'],
+            'start_callback' => $this->input['callback_id'],
+            'callback'       => 'chhyup',
+            'args'           => [],
+        ];
+    }
+
+    public function changeHysteriaDown()
+    {
+        $r = $this->send(
+            $this->input['chat'],
+            "@{$this->input['username']} enter download bandwidth in mbps (e.g. 1000)",
+            $this->input['message_id'],
+            reply: 'enter mbps',
+        );
+        $_SESSION['reply'][$r['result']['message_id']] = [
+            'start_message'  => $this->input['message_id'],
+            'start_callback' => $this->input['callback_id'],
+            'callback'       => 'chhydown',
+            'args'           => [],
+        ];
+    }
+
+    public function chhyup($val)
+    {
+        $val = (int) preg_replace('/[^0-9]/', '', $val);
+        if ($val > 0) {
+            $pac = $this->getPacConf();
+            $pac['hysteria_up'] = $val;
+            $this->setPacConf($pac);
+            $this->restartHysteria();
+        }
+        $this->menu('hy');
+    }
+
+    public function chhydown($val)
+    {
+        $val = (int) preg_replace('/[^0-9]/', '', $val);
+        if ($val > 0) {
+            $pac = $this->getPacConf();
+            $pac['hysteria_down'] = $val;
+            $this->setPacConf($pac);
+            $this->restartHysteria();
+        }
+        $this->menu('hy');
+    }
+
+    public function toggleHysteriaObfs()
+    {
+        $pac = $this->getPacConf();
+        $pac['hysteria_obfs'] = empty($pac['hysteria_obfs']) ? 1 : 0;
+        $this->setPacConf($pac);
+        $this->restartHysteria();
+        $this->menu('hy');
+    }
+
+    public function changeHysteriaObfsPass()
+    {
+        $r = $this->send(
+            $this->input['chat'],
+            "@{$this->input['username']} enter obfs password for salamander",
+            $this->input['message_id'],
+            reply: 'enter obfs password',
+        );
+        $_SESSION['reply'][$r['result']['message_id']] = [
+            'start_message'  => $this->input['message_id'],
+            'start_callback' => $this->input['callback_id'],
+            'callback'       => 'chhyobfspass',
+            'args'           => [],
+        ];
+    }
+
+    public function chhyobfspass($pass)
+    {
+        $pac = $this->getPacConf();
+        if (!empty($pass)) {
+            $pac['hysteria_obfs_pass'] = $pass;
+        } else {
+            unset($pac['hysteria_obfs_pass']);
+        }
+        $this->setPacConf($pac);
+        $this->restartHysteria();
+        $this->menu('hy');
+    }
+
+    public function toggleHysteriaIgnoreBw()
+    {
+        $pac = $this->getPacConf();
+        $pac['hysteria_ignore_bw'] = empty($pac['hysteria_ignore_bw']) ? 1 : 0;
+        $this->setPacConf($pac);
+        $this->restartHysteria();
+        $this->menu('hy');
+    }
+
+    public function toggleHysteriaSpeedTest()
+    {
+        $pac = $this->getPacConf();
+        $pac['hysteria_speedtest'] = empty($pac['hysteria_speedtest']) ? 1 : 0;
+        $this->setPacConf($pac);
+        $this->restartHysteria();
+        $this->menu('hy');
+    }
+
+    public function toggleHysteriaUDP()
+    {
+        $pac = $this->getPacConf();
+        $pac['hysteria_disable_udp'] = empty($pac['hysteria_disable_udp']) ? 1 : 0;
+        $this->setPacConf($pac);
+        $this->restartHysteria();
+        $this->menu('hy');
+    }
+
+    public function toggleHysteriaObfsType()
+    {
+        $pac = $this->getPacConf();
+        $pac['hysteria_obfs_type'] = ($pac['hysteria_obfs_type'] ?? 'salamander') === 'salamander'
+            ? 'gecko'
+            : 'salamander';
+        $this->setPacConf($pac);
+        $this->restartHysteria();
+        $this->menu('hy');
+    }
+
+    public function changeHysteriaHopRange()
+    {
+        $r = $this->send(
+            $this->input['chat'],
+            "@{$this->input['username']} enter port hop range (e.g. 20000-30000) or 0 to disable",
+            $this->input['message_id'],
+            reply: 'enter port range',
+        );
+        $_SESSION['reply'][$r['result']['message_id']] = [
+            'start_message'  => $this->input['message_id'],
+            'start_callback' => $this->input['callback_id'],
+            'callback'       => 'setHysteriaHopRange',
+            'args'           => [],
+        ];
+    }
+
+    public function getHysteriaMainPort()
+    {
+        $f = '/docker/compose';
+        $c = yaml_parse_file($f)['services'];
+        return explode(':', $c['hy']['ports'][0])[0];
+    }
+
+    public function setHysteriaHopRange($range)
+    {
+        $pac      = $this->getPacConf();
+        $mainPort = $this->getHysteriaMainPort();
+
+        // Remove existing iptables rule if any
+        if (!empty($pac['hysteria_hop_range'])) {
+            [$oldFrom, $oldTo] = explode('-', $pac['hysteria_hop_range']);
+            exec("docker run --rm --net=host --cap-add=NET_ADMIN --pid=host alpine:latest iptables -t nat -D PREROUTING -p udp --dport $oldFrom:$oldTo -j REDIRECT --to-ports $mainPort 2>/dev/null");
+        }
+
+        if ($range === '0' || empty(trim($range))) {
+            unset($pac['hysteria_hop_range']);
+        } elseif (preg_match('/^(\d+)-(\d+)$/', trim($range), $m) && (int)$m[1] < (int)$m[2]) {
+            exec("docker run --rm --net=host --cap-add=NET_ADMIN --pid=host alpine:latest sh -c 'apk add -q iptables && iptables -t nat -A PREROUTING -p udp --dport {$m[1]}:{$m[2]} -j REDIRECT --to-ports $mainPort'");
+            $pac['hysteria_hop_range'] = trim($range);
+        } else {
+            $this->send($this->input['chat'], "❌ Invalid range. Use format: 20000-30000 or 0 to disable", $this->input['message_id']);
+            $this->menu('hy');
+            return;
+        }
+
+        $this->setPacConf($pac);
         $this->menu('hy');
     }
 
@@ -6031,6 +6293,60 @@ DNS-over-HTTPS with IP:
         ];
         $data[] = [
             [
+                'text'          => "↑ Upload ({$up} mbps)",
+                'callback_data' => "/changeHysteriaUp",
+            ],
+            [
+                'text'          => "↓ Download ({$down} mbps)",
+                'callback_data' => "/changeHysteriaDown",
+            ],
+        ];
+        $obfsType  = $pac['hysteria_obfs_type'] ?? 'salamander';
+        $ignoreBw  = !empty($pac['hysteria_ignore_bw']);
+
+        $data[] = [
+            [
+                'text'          => ($obfs ? "✅" : "❌") . " obfs $obfsType",
+                'callback_data' => "/toggleHysteriaObfs",
+            ],
+            [
+                'text'          => "🔄 " . ($obfsType === 'gecko' ? 'gecko' : 'salamander'),
+                'callback_data' => "/toggleHysteriaObfsType",
+            ],
+        ];
+        $data[] = [
+            [
+                'text'          => "🔑 obfs password" . ($obfsPass ? " ✅" : " ❌"),
+                'callback_data' => "/changeHysteriaObfsPass",
+            ],
+        ];
+        $speedTest = !empty($pac['hysteria_speedtest']);
+        $noUDP     = !empty($pac['hysteria_disable_udp']);
+
+        $data[] = [
+            [
+                'text'          => ($ignoreBw ? "✅" : "❌") . " force BBR (ignore client bw)",
+                'callback_data' => "/toggleHysteriaIgnoreBw",
+            ],
+        ];
+        $data[] = [
+            [
+                'text'          => ($speedTest ? "✅" : "❌") . " speed test",
+                'callback_data' => "/toggleHysteriaSpeedTest",
+            ],
+            [
+                'text'          => ($noUDP ? "❌" : "✅") . " UDP proxy",
+                'callback_data' => "/toggleHysteriaUDP",
+            ],
+        ];
+        $data[] = [
+            [
+                'text'          => "🔀 port hopping: " . ($hopRange ?: "off"),
+                'callback_data' => "/changeHysteriaHopRange",
+            ],
+        ];
+        $data[] = [
+            [
                 'text'          => $this->i18n('back'),
                 'callback_data' => "/menu",
             ],
@@ -6043,18 +6359,85 @@ DNS-over-HTTPS with IP:
 
     public function hysteriaMenu()
     {
-        $pac    = $this->getPacConf();
-        $f      = '/docker/compose';
-        $c      = yaml_parse_file($f)['services'];
-        $port   = explode(':', $c['hy']['ports'][0])[0];
-        $domain = $this->getDomain();
-        $text[] = "Menu -> Hysteria";
-        $text[] = "server: " . ($port? "<code>$domain:$port</code>" : 'port unavailable');
-        $text[] = "passwd: <code>{$pac['hysteria_pass']}</code>";
+        $pac      = $this->getPacConf();
+        $f        = '/docker/compose';
+        $c        = yaml_parse_file($f)['services'];
+        $port     = explode(':', $c['hy']['ports'][0])[0];
+        $domain   = $this->getDomain();
+        $up       = $pac['hysteria_up']       ?? '1000';
+        $down     = $pac['hysteria_down']     ?? '1000';
+        $pass     = $pac['hysteria_pass']     ?? '';
+        $obfs     = !empty($pac['hysteria_obfs']);
+        $obfsPass = $pac['hysteria_obfs_pass'] ?? '';
+        $hopRange = $pac['hysteria_hop_range']  ?? '';
+        $ignoreBw  = !empty($pac['hysteria_ignore_bw']);
+        $speedTest = !empty($pac['hysteria_speedtest']);
+        $noUDP     = !empty($pac['hysteria_disable_udp']);
+
+        $text[] = "Menu -> Hysteria <b>2</b>";
+        if ($port && $pass) {
+            $obfsParam = ($obfs && $obfsPass)
+                ? '&obfs=salamander&obfs-password=' . urlencode($obfsPass)
+                : '';
+            $serverAddr = $hopRange ? "$domain:$port,$hopRange" : "$domain:$port";
+            $hy2link = "hy2://" . urlencode($pass) . "@{$serverAddr}/?insecure=0{$obfsParam}#vpnbot";
+            $text[] = "server: <code>$domain:$port</code>";
+            $text[] = "passwd: <code>$pass</code>";
+            $text[] = "bandwidth: ↑" . ($up ?: '∞') . " / ↓" . ($down ?: '∞') . " mbps";
+            $text[] = "obfs: " . ($obfs ? "✅ salamander" : "❌ off");
+            $text[] = "port hopping: " . ($hopRange ? "✅ <code>$hopRange</code>" : "❌ off");
+            $text[] = "\nhy2:// link:\n<code>$hy2link</code>";
+        } else {
+            $text[] = "server: " . ($port ? "<code>$domain:$port</code>" : 'port unavailable');
+            $text[] = "⚠️ Set password to activate Hysteria2";
+        }
+
         $data[] = [
             [
                 'text'          => $this->i18n('change password'),
                 'callback_data' => "/changeHysteriaPass",
+            ],
+        ];
+        $data[] = [
+            [
+                'text'          => "↑ Upload ({$up} mbps)",
+                'callback_data' => "/changeHysteriaUp",
+            ],
+            [
+                'text'          => "↓ Download ({$down} mbps)",
+                'callback_data' => "/changeHysteriaDown",
+            ],
+        ];
+        $data[] = [
+            [
+                'text'          => ($obfs ? "✅" : "❌") . " obfs salamander",
+                'callback_data' => "/toggleHysteriaObfs",
+            ],
+            [
+                'text'          => "🔑 obfs password" . ($obfsPass ? " ✅" : ""),
+                'callback_data' => "/changeHysteriaObfsPass",
+            ],
+        ];
+        $data[] = [
+            [
+                'text'          => ($ignoreBw ? "✅" : "❌") . " force BBR (ignore client bw)",
+                'callback_data' => "/toggleHysteriaIgnoreBw",
+            ],
+        ];
+        $data[] = [
+            [
+                'text'          => ($speedTest ? "✅" : "❌") . " speed test",
+                'callback_data' => "/toggleHysteriaSpeedTest",
+            ],
+            [
+                'text'          => ($noUDP ? "❌" : "✅") . " UDP proxy",
+                'callback_data' => "/toggleHysteriaUDP",
+            ],
+        ];
+        $data[] = [
+            [
+                'text'          => "🔀 port hopping: " . ($hopRange ?: "off"),
+                'callback_data' => "/changeHysteriaHopRange",
             ],
         ];
         $data[] = [
