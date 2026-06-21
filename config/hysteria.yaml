@@ -5,7 +5,7 @@ tls:
   key: /certs/cert_private
 auth:
   type: password
-  password: zeVQJnpYS39kUNuN
+  password: 69b7087ce42bae42
 quic:
   initStreamReceiveWindow: 26843545
   maxStreamReceiveWindow: 26843545
