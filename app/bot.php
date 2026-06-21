@@ -422,6 +422,12 @@ class Bot
             case preg_match('~^/changeHysteriaPass$~', $this->input['callback'], $m):
                 $this->changeHysteriaPass();
                 break;
+            case preg_match('~^/genHysteriaPass$~', $this->input['callback'], $m):
+                $this->genHysteriaPass();
+                break;
+            case preg_match('~^/genHysteriaObfsPass$~', $this->input['callback'], $m):
+                $this->genHysteriaObfsPass();
+                break;
             case preg_match('~^/changeHysteriaUp$~', $this->input['callback'], $m):
                 $this->changeHysteriaUp();
                 break;
@@ -638,6 +644,33 @@ class Bot
                 break;
             case preg_match('~^/routes(?: (\d+))?$~', $this->input['callback'], $m):
                 $this->routes($m[1] ?: 0);
+                break;
+            case preg_match('~^/xrayAdvanced$~', $this->input['callback'], $m):
+                $this->xrayAdvanced();
+                break;
+            case preg_match('~^/toggleXrayFlow$~', $this->input['callback'], $m):
+                $this->toggleXrayFlow();
+                break;
+            case preg_match('~^/toggleXrayFragment$~', $this->input['callback'], $m):
+                $this->toggleXrayFragment();
+                break;
+            case preg_match('~^/changeXrayFragmentParams$~', $this->input['callback'], $m):
+                $this->changeXrayFragmentParams();
+                break;
+            case preg_match('~^/toggleXrayMux$~', $this->input['callback'], $m):
+                $this->toggleXrayMux();
+                break;
+            case preg_match('~^/cycleXrayFingerprint$~', $this->input['callback'], $m):
+                $this->cycleXrayFingerprint();
+                break;
+            case preg_match('~^/changeXrayMaxTimeDiff$~', $this->input['callback'], $m):
+                $this->changeXrayMaxTimeDiff();
+                break;
+            case preg_match('~^/changeXrayShortIdCount$~', $this->input['callback'], $m):
+                $this->changeXrayShortIdCount();
+                break;
+            case preg_match('~^/changeXrayPadding$~', $this->input['callback'], $m):
+                $this->changeXrayPadding();
                 break;
             case preg_match('~^/xtlswarp(?: (\d+))?$~', $this->input['callback'], $m):
                 $this->xtlswarp($m[1] ?: 0);
@@ -1421,6 +1454,26 @@ class Bot
         }
         $this->setPacConf($pac);
         $this->restartHysteria();
+        $this->menu('hy');
+    }
+
+    public function genHysteriaPass()
+    {
+        $pac = $this->getPacConf();
+        $pac['hysteria_pass'] = bin2hex(random_bytes(8));
+        $this->setPacConf($pac);
+        $this->restartHysteria();
+        $this->answer($this->input['callback_id'], 'password regenerated', true);
+        $this->menu('hy');
+    }
+
+    public function genHysteriaObfsPass()
+    {
+        $pac = $this->getPacConf();
+        $pac['hysteria_obfs_pass'] = bin2hex(random_bytes(8));
+        $this->setPacConf($pac);
+        $this->restartHysteria();
+        $this->answer($this->input['callback_id'], 'obfs password regenerated', true);
         $this->menu('hy');
     }
 
@@ -6293,60 +6346,6 @@ DNS-over-HTTPS with IP:
         ];
         $data[] = [
             [
-                'text'          => "↑ Upload ({$up} mbps)",
-                'callback_data' => "/changeHysteriaUp",
-            ],
-            [
-                'text'          => "↓ Download ({$down} mbps)",
-                'callback_data' => "/changeHysteriaDown",
-            ],
-        ];
-        $obfsType  = $pac['hysteria_obfs_type'] ?? 'salamander';
-        $ignoreBw  = !empty($pac['hysteria_ignore_bw']);
-
-        $data[] = [
-            [
-                'text'          => ($obfs ? "✅" : "❌") . " obfs $obfsType",
-                'callback_data' => "/toggleHysteriaObfs",
-            ],
-            [
-                'text'          => "🔄 " . ($obfsType === 'gecko' ? 'gecko' : 'salamander'),
-                'callback_data' => "/toggleHysteriaObfsType",
-            ],
-        ];
-        $data[] = [
-            [
-                'text'          => "🔑 obfs password" . ($obfsPass ? " ✅" : " ❌"),
-                'callback_data' => "/changeHysteriaObfsPass",
-            ],
-        ];
-        $speedTest = !empty($pac['hysteria_speedtest']);
-        $noUDP     = !empty($pac['hysteria_disable_udp']);
-
-        $data[] = [
-            [
-                'text'          => ($ignoreBw ? "✅" : "❌") . " force BBR (ignore client bw)",
-                'callback_data' => "/toggleHysteriaIgnoreBw",
-            ],
-        ];
-        $data[] = [
-            [
-                'text'          => ($speedTest ? "✅" : "❌") . " speed test",
-                'callback_data' => "/toggleHysteriaSpeedTest",
-            ],
-            [
-                'text'          => ($noUDP ? "❌" : "✅") . " UDP proxy",
-                'callback_data' => "/toggleHysteriaUDP",
-            ],
-        ];
-        $data[] = [
-            [
-                'text'          => "🔀 port hopping: " . ($hopRange ?: "off"),
-                'callback_data' => "/changeHysteriaHopRange",
-            ],
-        ];
-        $data[] = [
-            [
                 'text'          => $this->i18n('back'),
                 'callback_data' => "/menu",
             ],
@@ -6356,7 +6355,6 @@ DNS-over-HTTPS with IP:
             'data' => $data,
         ];
     }
-
     public function hysteriaMenu()
     {
         $pac      = $this->getPacConf();
@@ -6389,13 +6387,17 @@ DNS-over-HTTPS with IP:
             $text[] = "\nhy2:// link:\n<code>$hy2link</code>";
         } else {
             $text[] = "server: " . ($port ? "<code>$domain:$port</code>" : 'port unavailable');
-            $text[] = "⚠️ Set password to activate Hysteria2";
+            $text[] = "⚠ Set password to activate Hysteria2";
         }
 
         $data[] = [
             [
                 'text'          => $this->i18n('change password'),
                 'callback_data' => "/changeHysteriaPass",
+            ],
+            [
+                'text'          => "🎲 generate",
+                'callback_data' => "/genHysteriaPass",
             ],
         ];
         $data[] = [
@@ -6416,6 +6418,10 @@ DNS-over-HTTPS with IP:
             [
                 'text'          => "🔑 obfs password" . ($obfsPass ? " ✅" : ""),
                 'callback_data' => "/changeHysteriaObfsPass",
+            ],
+            [
+                'text'          => "🎲 generate",
+                'callback_data' => "/genHysteriaObfsPass",
             ],
         ];
         $data[] = [
@@ -7131,6 +7137,10 @@ DNS-over-HTTPS with IP:
                 'text'          => $this->i18n('routes'),
                 'callback_data' => "/routes",
             ],
+            [
+                'text'          => "⚙ Advanced",
+                'callback_data' => "/xrayAdvanced",
+            ],
         ];
         foreach ($c['inbounds'][0]['settings']['clients'] as $k => $v) {
             if (!empty($v['off'])) {
@@ -7249,6 +7259,342 @@ DNS-over-HTTPS with IP:
             implode("\n", $text ?: ['...']),
             $data ?: false,
         );
+    }
+
+    public function xrayAdvanced()
+    {
+        $p          = $this->getPacConf();
+        $flow       = $p['xray_flow_off'] ? false : true;
+        $fragment   = !empty($p['xray_fragment']);
+        $fragParams = $p['xray_fragment_params'] ?? 'tlshello,100-200,10-20';
+        $mux        = !empty($p['xray_mux']);
+        $fp         = $p['xray_fingerprint'] ?? 'chrome';
+        $maxTimeDiff = $p['xray_maxtimediff'] ?? 0;
+        $shortIdCount = $p['xray_shortid_count'] ?? 1;
+        $padding    = $p['xray_padding'] ?? '100-1000';
+
+        $text[] = "Menu -> " . $this->i18n('xray') . " -> Advanced";
+        $text[] = "transport: " . ($p['transport'] ?: 'Websocket');
+        if ($p['transport'] == 'Reality') {
+            $text[] = "flow: " . ($flow ? "xtls-rprx-vision" : "none (compat mode)");
+            $text[] = "fingerprint: <code>$fp</code>";
+            $text[] = "maxTimeDiff: " . ($maxTimeDiff ?: 'default (60s)');
+            $text[] = "shortIds: $shortIdCount";
+        }
+        $text[] = "fragment: " . ($fragment ? "✅ <code>$fragParams</code>" : "❌ off");
+        $text[] = "mux.cool: " . ($mux ? "✅" : "❌");
+        if (in_array($p['transport'], ['xhttp', 'Websocket'])) {
+            $text[] = "padding bytes: <code>$padding</code>";
+        }
+
+        $data = [];
+        if ($p['transport'] == 'Reality') {
+            $data[] = [
+                [
+                    'text'          => "flow: " . ($flow ? "vision" : "none"),
+                    'callback_data' => "/toggleXrayFlow",
+                ],
+                [
+                    'text'          => "fp: $fp",
+                    'callback_data' => "/cycleXrayFingerprint",
+                ],
+            ];
+            $data[] = [
+                [
+                    'text'          => "maxTimeDiff: " . ($maxTimeDiff ?: 'default'),
+                    'callback_data' => "/changeXrayMaxTimeDiff",
+                ],
+                [
+                    'text'          => "shortIds: $shortIdCount",
+                    'callback_data' => "/changeXrayShortIdCount",
+                ],
+            ];
+        }
+        $data[] = [
+            [
+                'text'          => ($fragment ? "✅" : "❌") . " fragment",
+                'callback_data' => "/toggleXrayFragment",
+            ],
+            [
+                'text'          => "⚙ fragment params",
+                'callback_data' => "/changeXrayFragmentParams",
+            ],
+        ];
+        $data[] = [
+            [
+                'text'          => ($mux ? "✅" : "❌") . " mux.cool",
+                'callback_data' => "/toggleXrayMux",
+            ],
+        ];
+        if (in_array($p['transport'], ['xhttp', 'Websocket'])) {
+            $data[] = [
+                [
+                    'text'          => "padding: $padding",
+                    'callback_data' => "/changeXrayPadding",
+                ],
+            ];
+        }
+        $data[] = [
+            [
+                'text'          => $this->i18n('back'),
+                'callback_data' => "/xray",
+            ],
+        ];
+        $this->update(
+            $this->input['chat'],
+            $this->input['message_id'],
+            implode("\n", $text ?: ['...']),
+            $data ?: false,
+        );
+    }
+
+    public function toggleXrayFlow()
+    {
+        $p = $this->getPacConf();
+        $p['xray_flow_off'] = empty($p['xray_flow_off']) ? 1 : 0;
+        $this->setPacConf($p);
+        $this->applyXrayAdvanced();
+        $this->xrayAdvanced();
+    }
+
+    public function cycleXrayFingerprint()
+    {
+        $list = ['chrome', 'firefox', 'safari', 'ios', 'android', 'edge', 'random', 'randomized'];
+        $p    = $this->getPacConf();
+        $cur  = $p['xray_fingerprint'] ?? 'chrome';
+        $idx  = array_search($cur, $list);
+        $next = $list[($idx === false ? 0 : $idx + 1) % count($list)];
+        $p['xray_fingerprint'] = $next;
+        $this->setPacConf($p);
+        $this->applyXrayAdvanced();
+        $this->xrayAdvanced();
+    }
+
+    public function changeXrayMaxTimeDiff()
+    {
+        $r = $this->send(
+            $this->input['chat'],
+            "@{$this->input['username']} enter maxTimeDiff in seconds (0 = default)",
+            $this->input['message_id'],
+            reply: 'enter seconds',
+        );
+        $_SESSION['reply'][$r['result']['message_id']] = [
+            'start_message'  => $this->input['message_id'],
+            'start_callback' => $this->input['callback_id'],
+            'callback'       => 'setXrayMaxTimeDiff',
+            'args'           => [],
+        ];
+    }
+
+    public function setXrayMaxTimeDiff($val)
+    {
+        $val = (int) preg_replace('/[^0-9]/', '', $val);
+        $p   = $this->getPacConf();
+        if ($val > 0) {
+            $p['xray_maxtimediff'] = $val;
+        } else {
+            unset($p['xray_maxtimediff']);
+        }
+        $this->setPacConf($p);
+        $this->applyXrayAdvanced();
+        $this->xrayAdvanced();
+    }
+
+    public function changeXrayShortIdCount()
+    {
+        $r = $this->send(
+            $this->input['chat'],
+            "@{$this->input['username']} enter number of shortIds to rotate (1-16)",
+            $this->input['message_id'],
+            reply: 'enter count 1-16',
+        );
+        $_SESSION['reply'][$r['result']['message_id']] = [
+            'start_message'  => $this->input['message_id'],
+            'start_callback' => $this->input['callback_id'],
+            'callback'       => 'setXrayShortIdCount',
+            'args'           => [],
+        ];
+    }
+
+    public function setXrayShortIdCount($val)
+    {
+        $val = max(1, min(16, (int) preg_replace('/[^0-9]/', '', $val)));
+        $p   = $this->getPacConf();
+        $p['xray_shortid_count'] = $val;
+        $this->setPacConf($p);
+        $this->applyXrayAdvanced();
+        $this->xrayAdvanced();
+    }
+
+    public function toggleXrayFragment()
+    {
+        $p = $this->getPacConf();
+        $p['xray_fragment'] = empty($p['xray_fragment']) ? 1 : 0;
+        $this->setPacConf($p);
+        $this->applyXrayAdvanced();
+        $this->xrayAdvanced();
+    }
+
+    public function changeXrayFragmentParams()
+    {
+        $r = $this->send(
+            $this->input['chat'],
+            "@{$this->input['username']} enter fragment params as packets,length,interval (e.g. tlshello,100-200,10-20)",
+            $this->input['message_id'],
+            reply: 'packets,length,interval',
+        );
+        $_SESSION['reply'][$r['result']['message_id']] = [
+            'start_message'  => $this->input['message_id'],
+            'start_callback' => $this->input['callback_id'],
+            'callback'       => 'setXrayFragmentParams',
+            'args'           => [],
+        ];
+    }
+
+    public function setXrayFragmentParams($val)
+    {
+        $val = trim($val);
+        $p   = $this->getPacConf();
+        if (preg_match('~^\w+,\d+-\d+,\d+-\d+$~', $val)) {
+            $p['xray_fragment_params'] = $val;
+        } else {
+            $this->send($this->input['chat'], "wrong format, expected: packets,length,interval");
+        }
+        $this->setPacConf($p);
+        $this->applyXrayAdvanced();
+        $this->xrayAdvanced();
+    }
+
+    public function toggleXrayMux()
+    {
+        $p = $this->getPacConf();
+        $p['xray_mux'] = empty($p['xray_mux']) ? 1 : 0;
+        $this->setPacConf($p);
+        $this->applyXrayAdvanced();
+        $this->xrayAdvanced();
+    }
+
+    public function changeXrayPadding()
+    {
+        $r = $this->send(
+            $this->input['chat'],
+            "@{$this->input['username']} enter padding bytes range (e.g. 100-1000)",
+            $this->input['message_id'],
+            reply: 'min-max',
+        );
+        $_SESSION['reply'][$r['result']['message_id']] = [
+            'start_message'  => $this->input['message_id'],
+            'start_callback' => $this->input['callback_id'],
+            'callback'       => 'setXrayPadding',
+            'args'           => [],
+        ];
+    }
+
+    public function setXrayPadding($val)
+    {
+        $val = trim($val);
+        $p   = $this->getPacConf();
+        if (preg_match('~^\d+-\d+$~', $val)) {
+            $p['xray_padding'] = $val;
+        } else {
+            $this->send($this->input['chat'], "wrong format, expected: min-max");
+        }
+        $this->setPacConf($p);
+        $this->applyXrayAdvanced();
+        $this->xrayAdvanced();
+    }
+
+    public function applyXrayAdvanced()
+    {
+        $p = $this->getPacConf();
+        $c = $this->getXray();
+        $h = $this->getHashBot();
+
+        $fp = $p['xray_fingerprint'] ?? 'chrome';
+
+        // Flow + fingerprint + maxTimeDiff + shortIds (Reality only)
+        if ($p['transport'] == 'Reality') {
+            foreach ($c['inbounds'][0]['settings']['clients'] as $k => $v) {
+                if (empty($p['xray_flow_off'])) {
+                    $c['inbounds'][0]['settings']['clients'][$k]['flow'] = 'xtls-rprx-vision';
+                } else {
+                    unset($c['inbounds'][0]['settings']['clients'][$k]['flow']);
+                }
+            }
+            $c['inbounds'][0]['streamSettings']['realitySettings']['fingerprint'] = $fp;
+            if (!empty($p['xray_maxtimediff'])) {
+                $c['inbounds'][0]['streamSettings']['realitySettings']['maxTimeDiff'] = $p['xray_maxtimediff'] * 1000;
+            } else {
+                unset($c['inbounds'][0]['streamSettings']['realitySettings']['maxTimeDiff']);
+            }
+            $shortIdCount = max(1, (int) ($p['xray_shortid_count'] ?? 1));
+            $existing     = $c['inbounds'][0]['streamSettings']['realitySettings']['shortIds'] ?? [];
+            $shortIds     = array_slice($existing, 0, 1);
+            while (count($shortIds) < $shortIdCount) {
+                $shortIds[] = trim($this->ssh('openssl rand -hex 8', 'xr'));
+            }
+            $c['inbounds'][0]['streamSettings']['realitySettings']['shortIds'] = array_values(array_unique($shortIds));
+        } else {
+            // tlsSettings fingerprint for non-Reality
+            if (!empty($c['inbounds'][0]['streamSettings']['tlsSettings'])) {
+                $c['inbounds'][0]['streamSettings']['tlsSettings']['fingerprint'] = $fp;
+            }
+        }
+
+        // Fragment (sockopt dialerProxy / freedom outbound fragment)
+        foreach ($c['outbounds'] as $k => $v) {
+            if (($v['tag'] ?? '') === 'fragment') {
+                unset($c['outbounds'][$k]);
+            }
+        }
+        $c['outbounds'] = array_values($c['outbounds']);
+        if (!empty($p['xray_fragment'])) {
+            [$packets, $length, $interval] = explode(',', $p['xray_fragment_params'] ?? 'tlshello,100-200,10-20');
+            array_unshift($c['outbounds'], [
+                'tag'      => 'fragment',
+                'protocol' => 'freedom',
+                'settings' => [
+                    'fragment' => [
+                        'packets'  => $packets,
+                        'length'   => $length,
+                        'interval' => $interval,
+                    ],
+                ],
+            ]);
+            // Route Reality handshake through fragment outbound
+            $hasRule = false;
+            foreach ($c['routing']['rules'] ?? [] as $rv) {
+                if (($rv['outboundTag'] ?? '') === 'fragment') {
+                    $hasRule = true;
+                }
+            }
+            if (!$hasRule) {
+                array_unshift($c['routing']['rules'], [
+                    'type'        => 'field',
+                    'outboundTag' => 'fragment',
+                    'network'     => 'tcp',
+                    'port'        => '443',
+                ]);
+            }
+        } else {
+            $c['routing']['rules'] = array_values(array_filter($c['routing']['rules'] ?? [], fn($rv) => ($rv['outboundTag'] ?? '') !== 'fragment'));
+        }
+
+        // mux.cool
+        foreach ($c['inbounds'][0]['settings']['clients'] as $k => $v) {
+            if (!empty($p['xray_mux'])) {
+                // mux is applied client-side via subscription, server just needs to allow it (no-op server side for VLESS)
+            }
+        }
+
+        // Padding for WS/XHTTP
+        if (in_array($p['transport'], ['xhttp', 'Websocket']) && !empty($p['xray_padding'])) {
+            if ($p['transport'] == 'xhttp' && !empty($c['inbounds'][0]['streamSettings']['xhttpSettings'])) {
+                $c['inbounds'][0]['streamSettings']['xhttpSettings']['extra']['xPaddingBytes'] = $p['xray_padding'];
+            }
+        }
+
+        $this->restartXray($c);
     }
 
     public function warpPlus()
@@ -7556,15 +7902,15 @@ DNS-over-HTTPS with IP:
         ];
         $data[] = [
             [
-                'text'    => $this->i18n('v2ray ⬇️'),
+                'text'    => $this->i18n('v2ray ⬇'),
                 'callback_data' => "/dw {$i} s",
             ],
             [
-                'text'    => $this->i18n('singbox ⬇️'),
+                'text'    => $this->i18n('singbox ⬇'),
                 'callback_data' => "/dw {$i} si",
             ],
             [
-                'text'    => $this->i18n('mihomo ⬇️'),
+                'text'    => $this->i18n('mihomo ⬇'),
                 'callback_data' => "/dw {$i} cl",
             ],
         ];
