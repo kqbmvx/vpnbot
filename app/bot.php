@@ -865,11 +865,26 @@ class Bot
             "statsOutboundUplink"   => true,
             "statsOutboundDownlink" => true
         ];
+        // Safety check: case-insensitive duplicate email detection
+        $seen = [];
+        foreach ($c['inbounds'][0]['settings']['clients'] as $v) {
+            $key = mb_strtolower($v['email'] ?? '');
+            if ($key !== '' && in_array($key, $seen, true)) {
+                $this->send($this->input['chat'] ?? null, 'xray config rejected: duplicate email (case-insensitive). Restart aborted, previous config kept.');
+                return;
+            }
+            $seen[] = $key;
+        }
+
         if (empty($norestart)) {
             $this->collectSession();
             file_put_contents('/config/xray.json', json_encode($c, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
             $this->ssh('pkill xray', 'xr');
             $this->ssh('xray run -config /xray.json > /dev/null 2>&1 &', 'xr');
+            usleep(700000);
+            if (empty($this->ssh('pgrep xray', 'xr'))) {
+                $this->send($this->input['chat'] ?? null, "🔴 WARNING: xray failed to start after restart! VLESS is DOWN. Check config manually.");
+            }
         } else {
             file_put_contents('/config/xray.json', json_encode($c, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
         }
@@ -6215,6 +6230,8 @@ DNS-over-HTTPS with IP:
         $c      = $this->getXray();
         $pac    = $this->getPacConf();
         $domain = $this->getDomain($pac['transport'] != 'Reality');
+        $fp     = $pac['xray_fingerprint'] ?? 'chrome';
+        $flow   = empty($pac['xray_flow_off']) ? '&flow=xtls-rprx-vision' : '&flow=';
         $scheme = empty($this->nginxGetTypeCert()) ? 'http' : 'https';
         $hash   = $this->getHashBot();
         $si     = "$scheme://{$domain}/pac$hash/" . base64_encode(serialize([
@@ -6240,10 +6257,10 @@ DNS-over-HTTPS with IP:
                         $link = "vless://{$c['inbounds'][0]['settings']['clients'][$i]['id']}@$domain:443"
                                     . "?security=reality"
                                     . "&sni={$c['inbounds'][0]['streamSettings']['realitySettings']['serverNames'][0]}"
-                                    . "&fp=chrome&pbk={$pac['xray']}"
+                                    . "&fp=$fp&pbk={$pac['xray']}"
                                     . "&sid={$c['inbounds'][0]['streamSettings']['realitySettings']['shortIds'][0]}"
                                     . "&type=tcp"
-                                    . "&flow=xtls-rprx-vision"
+                                    . $flow
                                     . "#{$c['inbounds'][0]['settings']['clients'][$i]['email']}";
                         break;
                     case 'xhttp':
@@ -6257,7 +6274,7 @@ DNS-over-HTTPS with IP:
                                     . "&mode=packet-up"
                                     . "&extra=%7B%22xmux%22%3A%7B%22cMaxReuseTimes%22%3A0%2C%22maxConcurrency%22%3A%2216-32%22%2C%22maxConnections%22%3A0%2C%22hKeepAlivePeriod%22%3A0%2C%22hMaxRequestTimes%22%3A%22600-900%22%2C%22hMaxReusableSecs%22%3A%221800-3000%22%7D%2C%22headers%22%3A%7B%7D%2C%22noGRPCHeader%22%3Afalse%2C%22xPaddingBytes%22%3A%22100-1000%22%2C%22scMaxEachPostBytes%22%3A1000000%2C%22scMinPostsIntervalMs%22%3A30%2C%22scStreamUpServerSecs%22%3A%2220-80%22%7D"
                                     . "&sni=$domain"
-                                    . "&fp=chrome"
+                                    . "&fp=$fp"
                                     . "&alpn=h2"
                                     . "#{$c['inbounds'][0]['settings']['clients'][$i]['email']}";
                         break;
@@ -6268,7 +6285,7 @@ DNS-over-HTTPS with IP:
                                     . "&path=%2Fws$hash"
                                     . "&security=tls"
                                     . "&sni=$domain"
-                                    . "&fp=chrome"
+                                    . "&fp=$fp"
                                     . "&type=ws"
                                     . "#{$c['inbounds'][0]['settings']['clients'][$i]['email']}";
                         break;
@@ -6646,14 +6663,15 @@ DNS-over-HTTPS with IP:
         $users = array_map(fn ($e) => explode(':', $e), $users);
         foreach ($c['inbounds'][0]['settings']['clients'] as $k => $v) {
             $uuids[]  = $v['id'];
-            $emails[] = $v['email'];
+            $emails[] = mb_strtolower($v['email']);
         }
         foreach ($users as $user) {
             $uuid = $user[1] ?: trim($this->ssh('xray uuid', 'xr'));
-            if (in_array($uuid, $uuids ?: []) || in_array($user[0], $emails ?: [])) {
-                $this->send($this->input['chat'], "user {$user[0]} already exists");
+            if (in_array($uuid, $uuids ?: []) || in_array(mb_strtolower($user[0]), $emails ?: [])) {
+                $this->send($this->input['chat'], "user {$user[0]} already exists (case-insensitive match)");
                 return $this->xray();
             }
+            $emails[] = mb_strtolower($user[0]);
             $c['inbounds'][0]['settings']['clients'][] = $p['transport'] != 'Reality' ? [
                     'id'    => $uuid,
                     'email' => $user[0],
@@ -6715,6 +6733,14 @@ DNS-over-HTTPS with IP:
     public function renXrUs($name, $i)
     {
         $c = $this->getXray();
+        $name = trim($name);
+        foreach ($c['inbounds'][0]['settings']['clients'] as $k => $v) {
+            if ($k != $i && mb_strtolower($v['email']) === mb_strtolower($name)) {
+                $this->send($this->input['chat'], "user $name already exists (case-insensitive match)");
+                $this->userXr($i);
+                return;
+            }
+        }
         $c['inbounds'][0]['settings']['clients'][$i]['email'] = $name;
         $this->restartXray($c);
         $this->adguardXrayClients();
